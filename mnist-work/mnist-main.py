@@ -19,6 +19,7 @@ WEIGHT_DECAY = .001
 EPOCHS = 1
 WARMUP = 0
 STEPS = [6, 8]
+MODEL_OUTPUT = "saved/model.pt"
 
 """
 Function - Data Loading and Prep
@@ -63,6 +64,13 @@ def get_optimizer(model):
 """
 Functions - Training and Validation
 """
+def add_layer_grey_to_color(data):
+    conv = nn.Conv2d(1, 3, 1)
+    if torch.cuda.is_available():
+        conv = conv.cuda()
+    multi_channel = conv(data)
+    return multi_channel
+
 def change_learning_rate(optimizer, epoch):
     epoch += 1
     if epoch <= WARMUP:
@@ -102,19 +110,19 @@ def accuracy(output, target):
     return acc
 
 def train(epoch, data_loader, model, optimizer, criterion):
+    # Record times, losses, accuracy
     iter_time = AverageMeter()
     losses = AverageMeter()
     acc = AverageMeter()
-
+    # For each batch
     for idx, (data, target) in enumerate(data_loader):
         start = time.time()
-
+        # Send to GPU if possible
         if torch.cuda.is_available():
             data = data.cuda()
             target = target.cuda()
-
-        conv = nn.Conv2d(1, 3, 1)
-        multi_channel = conv(data)
+        
+        multi_channel = add_layer_grey_to_color(data)
         out = model.forward(multi_channel)
         loss = criterion(out, target)
         model.zero_grad()
@@ -150,7 +158,7 @@ def validate(epoch, val_loader, model, criterion):
             target = target.cuda()
 
         with torch.no_grad():
-            multi_channel = conv(data)
+            multi_channel = add_layer_grey_to_color(data)
             out = model.forward(multi_channel)
             loss = criterion(out, target)
 
@@ -176,6 +184,19 @@ def validate(epoch, val_loader, model, criterion):
 
     print("* Prec @1: {top1.avg:.4f}".format(top1=acc))
     return acc.avg, cm
+
+"""
+Functions - Model IO
+"""
+def save_model(model):
+    print(f"Saving model to {MODEL_OUTPUT}")
+    torch.save(model.state_dict(), MODEL_OUTPUT)
+
+def load_model():
+    model = models.efficientnet_b0()
+    model.load_state_dict(torch.load(MODEL_OUTPUT))
+    model.eval()
+    return model
 
 """
 Functions - Main
@@ -212,6 +233,9 @@ def main():
     per_cls_acc = best['class_accuracy'].diag().detach().numpy().tolist()
     for i, acc_i in enumerate(per_cls_acc):
         print("Accuracy of Class {}: {:.4f}".format(i, acc_i))
+
+    # Save
+    save_model(model)
     
 # Run main
 if __name__ == '__main__':
