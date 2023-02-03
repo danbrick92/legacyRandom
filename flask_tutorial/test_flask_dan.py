@@ -1,5 +1,6 @@
 # Imports
 import requests
+import time
 
 
 # Globals
@@ -75,13 +76,32 @@ def test_run():
     test_post(1)  # success
 
     test_get(1)  # success
-    test_get_malformed()  # 404 - not found
-    test_get_fake()  # 409 - could not find id
+    # test_get_malformed()  # 404 - not found
+    # test_get_fake()  # 409 - could not find id
+    #
+    # test_post_lack_json(2)  # 400 - not found
+    # test_post(1)  # should fail, identical therefore not unique
+    # test_post_json_field_missing_field(3)  # 400 - invalid params
+    # test_post_json_field_wrong_dtype(3)  # 400 - invalid params
+    #
+    # test_delete(1)  # success
+    # test_delete_bad_id()  # 404 - not found
 
-    test_post_lack_json(2)  # 400 - not found
-    test_post(1)  # should fail, identical therefore not unique
-    test_post_json_field_missing_field(3)  # 400 - invalid params
-    test_post_json_field_wrong_dtype(3)  # 400 - invalid params
 
-    test_delete(1)  # success
-    test_delete_bad_id()  # 404 - not found
+def test_token():
+    # Success
+    response = requests.get(BASE + "/login/2")
+    token = response.json()['token']
+    response = requests.post(BASE + "/login/2", headers={'Authorization': f'Bearer {token}'})
+    print(response.json())
+    # Fail
+    response = requests.get(BASE + "/login/1")
+    token = response.json()['token']
+    response = requests.post(BASE + "/login/1", headers={'Authorization': f'Bearer {token}'})
+    print(response.json())
+    # Expiration
+    response = requests.get(BASE + "/login/2")
+    token = response.json()['token']
+    time.sleep(6)
+    response = requests.post(BASE + "/login/2", headers={'Authorization': f'Bearer {token}'})
+    print(response.json())

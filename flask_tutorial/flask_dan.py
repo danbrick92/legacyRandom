@@ -1,16 +1,21 @@
 # Imports
+import flask
 from flask import Flask, request
 from flask_restx import Api, Resource, abort
 from flask_marshmallow import Marshmallow
 from flask_sqlalchemy import SQLAlchemy
+from flask_jwt_extended import JWTManager, jwt_required, create_access_token, get_jwt_identity
 
 
 # Start flask app
 app = Flask(__name__)
 api = Api(app, title='Swords', description='Add, remove, or get a sword in your inventory')
 app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///dan.db"
+app.config['JWT_SECRET_KEY'] = 'super-secret'  # really important to secure this!
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = 5  # expires after 5 seconds
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
+jwt = JWTManager(app)
 
 
 # Create model
@@ -82,11 +87,39 @@ class Sword(Resource):
         return {'msg': 'deleted'}
 
 
+# Authentication
+class Login(Resource):
+    put_group = [1, 3, 5]
+    both_group = [2, 4, 6]
+
+    def get(self, login_id):
+        login_id = create_access_token(identity=login_id)
+        return flask.jsonify(token=login_id)
+
+    @jwt_required()
+    def post(self, login_id):
+        current_user = get_jwt_identity()
+        if current_user in self.both_group:
+            message = 'success'
+        else:
+            abort(401, kwargs={'msg': 'not authorized'})
+        return flask.jsonify(message=message, current_user=current_user)
+
+    @jwt_required()
+    def put(self, login_id):
+        current_user = get_jwt_identity()
+        if current_user in self.put_group or current_user in self.both_group:
+            message = 'success'
+        else:
+            abort(401, kwargs={'msg': 'not authorized'})
+        return flask.jsonify(message, current_user=current_user)
+
+
 # Final Steps
 # with app.app_context():
 #     db.create_all()  # DO THIS ONLY ONCE
 api.add_resource(Sword, "/sword/<int:sword_id>")
-
+api.add_resource(Login, "/login/<int:login_id>")
 
 # Main
 if __name__ == '__main__':

@@ -5,3 +5,4 @@ flask-restx==1.0.5
 requests==2.27.1
 flask-marshmallow==0.14.0
 marshmallow-sqlalchemy==0.28.1
+flask_jwt_extended==4.4.4
