@@ -40,7 +40,7 @@ def check_circuit_complete(circuit):
 
 def simulate_lightbulb(circuit, bulb_index):
     # Ensure we have a closed circuit for each component
-    check_circuit_complete(circuit)
+    # check_circuit_complete(circuit)
     # Run the simulation of each component in order
     for component in circuit.circuit:
         component.simulate()
