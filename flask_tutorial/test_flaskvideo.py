@@ -74,6 +74,23 @@ def test_db():
     print(response.json())
 
 
+def test_restx():
+    response = requests.get(BASE + 'video/1')
+    print(response.json())
+    response = requests.post(BASE + 'video/2', json={"likes": 10, 'name': 'The Matrix 3', 'views': 800})
+    print(response.json())
+    response = requests.get(BASE + 'video/2')
+    print(response.json())
+    response = requests.patch(BASE + 'video/2', json={"likes": 100, 'name': 'The Matrix 3', 'views': 800})
+    print(response.json())
+    response = requests.get(BASE + 'video/2')
+    print(response.json())
+    response = requests.delete(BASE + 'video/1')
+    print(response)
+    response = requests.delete(BASE + 'video/2')
+    print(response)
+
+
 if __name__ == '__main__':
     # test_helloworld_get()
     # test_helloworld_post()
@@ -84,4 +101,4 @@ if __name__ == '__main__':
     # test_video_not_found_abort()
     # test_video_delete()
     # test_put_post()
-    test_db()
+    test_restx()
