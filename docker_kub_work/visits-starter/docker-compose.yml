@@ -1,0 +1,12 @@
+version: '3'  # this is the version of docker compose
+
+services:  # a service is a type of container that runs a particular service
+  redis-server:
+    image: 'redis'  # use the redis image
+    restart: unless-stopped
+
+  node-app:
+    build: .  # look for a dockerfile in the current directory
+    restart: always
+    ports:
+      - "8081:8081"  # port forwarding local -> container
