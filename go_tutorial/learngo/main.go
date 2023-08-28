@@ -1,19 +1,31 @@
 package main
 
 import (
+	"bufio"
+	_ "embed"
+	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
+	"io"
 	"learngo/armor"
 	"learngo/income"
 	"learngo/rectangleerror"
 	"learngo/salarycalc"
 	"learngo/simpleerror"
 	"learngo/weapon"
+	"log"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
+	"regexp"
+	"sort"
+	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 func printHelloWorld() {
@@ -434,19 +446,52 @@ func mutate(s []rune) string {
 	return string(s)
 }
 
-func strings() {
+func stringsWork() {
 	// a string is a slice of bytes
 	name := "Hello World"
 	fmt.Printf("String: %s\n", name)
 
 	// since it is a string of bytes, you can acces each byte
-	fmt.Printf("%x ", name[0])
+	for i := 0; i < len(name); i++ {
+		fmt.Printf("%x ", name[i])
+	}
 
-	// accessing each charcter can be done via [] notation
-	fmt.Printf("%c ", name[0])
+	// accessing each charcter can be done via [] notation as well
+	fmt.Printf("\n%c \n", name[0])
+
+	/*
+		But there is an issue - sometimes certain unicode characaters occupy more than 1 byte (ñ for example)
+		This will end up creating problems.
+
+		Runes help - a rune is an alias of an int32, which represent a unicode point in Go.
+	*/
+	runes := []rune(name)
+	for i := 0; i < len(runes); i++ {
+		fmt.Printf("%c ", runes[i])
+	} // Basically, this is a unicode safe way to parse strings
+
+	// Using ranges, there is an even better way to iterate through a string
+	for index, rune := range name {
+		fmt.Printf("%c starts at byte %d\n", rune, index)
+	}
+
+	// How to create a string from a slice of bytes - just cast it!
+	byteSlice := []byte{0x43, 0x61, 0x66, 0xC3, 0xA9}
+	str := string(byteSlice)
+	fmt.Println(str)
+
+	// How to create a string from a slice of runes - just cast it!
+	runeSlice := []rune{0x0053, 0x0065, 0x00f1, 0x006f, 0x0072}
+	str1 := string(runeSlice)
+	fmt.Println(str1)
 
 	// checking if two strings are equal is easy
-	fmt.Println(name == "Dan")
+	fmt.Println("\n", name == "Dan")
+
+	// String lengtth - len(string) simply returns the number of bytes, not the true string length
+	// Instead, we should use utf8.RuneCountInString()
+	fmt.Println("Byte Length of ", str1, len(str1))
+	fmt.Println("Str Length of ", str1, utf8.RuneCountInString(str1))
 
 	// concatenating strings is easy
 	a := "Hello " + "World"
@@ -1600,8 +1645,486 @@ func panics() {
 	// addTwoNumbersThenDivideByX2(0, 10)
 }
 
-func firstClassFunctions() {
+// This function accepts as a parameter, a function that takes an int and returns an int
+func higherOrderFunc(a func(val int) int) {
+	value := 10
+	fmt.Println(a(value))
+}
 
+// This function returns a function that accepts an int and returns an int
+func higherOrderFunc2() func(val int) int {
+	c := func(a int) int {
+		return a * 2
+	}
+	return c
+}
+
+var fart string = "fart"
+
+func firstClassFunctions() {
+	/*
+		First class functions are functions that can be assigned to variables, passed to other functions,
+		and returned from other functions
+	*/
+	// Here is a quick anonmyous function
+	a := func() {
+		fmt.Println("hello world first class function")
+	}
+	a()
+
+	// You can do the same thing by not even assigning it to a variable
+	func() { fmt.Println("hello world first class function") }()
+
+	// Higher order functions are functions that accept other functions as params or return functions
+	b := func(x int) int {
+		return x * x
+	}
+	higherOrderFunc(b)
+	newFunc := higherOrderFunc2()
+	fmt.Println(newFunc(7))
+
+	// Closures - anonymous functions that can access variables outside their body
+	// Has the same level of access as anything within this function body
+	heyThere := 5
+	func() {
+		fmt.Println("heyThere =", heyThere)
+		fmt.Println(fart)
+	}()
+}
+
+func createQuery(q interface{}) {
+	// We can determine the concrete implementation of q and it's underlying values with Type and Value
+	t := reflect.TypeOf(q)
+	v := reflect.ValueOf(q)
+
+	fmt.Println("Type ", t)  // Will be of type main.order
+	fmt.Println("Value ", v) // 456, 56
+
+	// There is also Kind - which is more generic (struct)
+	k := t.Kind()
+	fmt.Println("Kind ", k)
+
+	// We can also extract specific values using NumField and Field
+	if reflect.ValueOf(q).Kind() == reflect.Struct { // we can use reflections to make comparisons
+		fmt.Println("Number of fields", v.NumField()) // Tells us the number of fields available
+		for i := 0; i < v.NumField(); i++ {
+			fmt.Printf("Field:%d type:%T value:%v\n", i, v.Field(i), v.Field(i)) // Field lets us actually extract the value from the nth field
+			// Notice that the value is of type reflect.Value
+		}
+	}
+}
+
+func reflection() {
+	// Reflection allows us to inspect the type and value of variables at runtime
+	type order struct {
+		ordId      int
+		customerId int
+	}
+
+	o := order{
+		ordId:      456,
+		customerId: 56,
+	}
+	createQuery(o) // Please follow this function for the basics of using reflection
+
+	// Extracting reflect.Value into real fields - these operations get the underlying values
+	a := 123
+	b := "Dan"
+	c := true
+	d := 123.456
+
+	a1 := reflect.ValueOf(a).Int()
+	b1 := reflect.ValueOf(b).String()
+	c1 := reflect.ValueOf(c).Bool()
+	d1 := reflect.ValueOf(d).Float()
+
+	fmt.Println(a1, b1, c1, d1)
+
+	// Use reflection sparingly - it is hard to make clear code with reflection
+}
+
+//go:embed filehandling/test.txt
+var contents3 []byte
+
+func readingFiles() {
+	// Reading an entire file into memory can be done in a few different ways
+	// 1 - Using the relative path
+	contents, err := os.ReadFile("filehandling/test.txt")
+	if err != nil {
+		fmt.Println("File reading error", err)
+		return
+	}
+	fmt.Println("Contents of file:", string(contents))
+
+	// 2 - Using the absolute path
+	contents1, err1 := os.ReadFile("C:\\Users\\danbr\\git\\legacyRandom\\go_tutorial\\learngo\\filehandling\\test.txt")
+	if err1 != nil {
+		fmt.Println("File reading error", err1)
+		return
+	}
+	fmt.Println("Contents of file:", string(contents1))
+
+	// 3 - Passing the file as a command line argument
+	fptr := flag.String("fpath", "filehandling/test.txt", "file path to read from") // command-line arg, default val, description of the flag
+	flag.Parse()
+	contents2, err2 := os.ReadFile(*fptr)
+	if err2 != nil {
+		fmt.Println("File reading error", err2)
+		return
+	}
+	fmt.Println("Contents of file:", string(contents2))
+
+	// 4 - Bundle the file with the binary
+	fmt.Println("Contents of file:", string(contents3)) // pay attention to the go:embded directive and variable above this function
+
+	// You can also read in a file line by line
+	lbl, errLbl := os.Open("filehandling/test.txt")
+	if errLbl != nil {
+		log.Fatal(errLbl) // Will get into the logging library later
+	}
+	defer func() {
+		if errLbl = lbl.Close(); errLbl != nil {
+			log.Fatal(errLbl)
+		}
+	}()
+	scanner := bufio.NewScanner(lbl) // Create a file scanner
+	for scanner.Scan() {             // Scan one line at a time
+		fmt.Println(scanner.Text())
+	}
+
+	// You can also read a file for a specified number of bytes at a time - not going to bother here
+}
+
+func writingFiles() {
+	// Lets write a string to a new file
+	// Step 1 - Create the file
+	f, err := os.Create("filehandling/create.txt") // this will create a new file or truncate it if it exists
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	// Step 2 - Write the string
+	l, err := f.WriteString("Hello World\n") // the standard write operation writes bytes
+	if err != nil {
+		fmt.Println(err)
+		f.Close()
+		return
+	}
+	fmt.Println(l, "bytes written successfully")
+
+	// Step 3 - Close the file
+	err = f.Close()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	// Writing strings line by line to a file that already exists
+	// Step 1 - Open the file
+	f1, err1 := os.OpenFile("filehandling/create.txt", os.O_APPEND|os.O_WRONLY, 0644) // These flags are crucial to the append mode
+	if err1 != nil {
+		fmt.Println(err1.Error())
+		return
+	}
+
+	// Step 2 - Write the new lines one at a time to the file
+	d := []string{"Welcome to the world of Go!", "Go is a compiled language.", "It is easy to learn Go."}
+	for _, v := range d {
+		fmt.Fprintln(f1, v) // This operation writes one line to the file
+		if err1 != nil {
+			fmt.Println(err1)
+			return
+		}
+	}
+
+	// Step 3 - CLose the file
+	err1 = f1.Close()
+	if err1 != nil {
+		fmt.Println(err1)
+		return
+	}
+	fmt.Println("file appended successfully")
+
+	/*
+		There is another section I am skipping about writing to a file concurrently, but I am skipping for now.
+	*/
+
+}
+
+type AcceptableTypes interface {
+	int | float64 | string
+}
+
+func addTwo[t1 int64 | float64 | string](p1 t1, p2 t1) t1 { // You define the acceptable types in square brackets, and then you can use those in the parameters and returns
+	var s t1
+	s = p1 + p2
+	return s
+}
+
+func addTwoV2[t1 AcceptableTypes](p1 t1, p2 t1) t1 { // Here we use the interface
+	var s t1
+	s = p1 + p2
+	return s
+}
+
+func generics() {
+	// Generics allow you to handle multiple types in a function
+	fmt.Println(addTwo[int64](60, 70)) // You have to specify the types you are passing into the generic function in brackets
+	fmt.Println(addTwo[float64](60.1, 70.1))
+	fmt.Println(addTwo[string]("Dan ", "Brickner"))
+
+	// You can also define an interface (here Numbers) that simplifies the call
+	fmt.Println(addTwoV2(60, 70)) // See here how it automatically sees that AcceptableTypes supports int, thus it works
+}
+
+func funcToBeTimedOut(ch chan string) {
+	time.Sleep(5 * time.Second)
+	ch <- "gosh!"
+}
+
+func timeouts() {
+	// TImeouts are important for connecting to external resources or things bound to execution time
+	c1 := make(chan string, 1)
+	go funcToBeTimedOut(c1)
+	select {
+	case res := <-c1:
+		fmt.Println(res)
+	case <-time.After(1 * time.Second): // this function waits for the specified time, and if no result has been received, it times out and runs below logic
+		fmt.Println("timeout 1")
+	}
+}
+
+func timerOperation(t *time.Timer) {
+	<-t.C
+	fmt.Println("Timer 1 fired")
+}
+
+func timers() {
+	// We use timers to execute code once in the future
+	// You tell the timer how long to wait and it provides a channel that will be notified at that time
+	timer1 := time.NewTimer(2 * time.Second)
+	go timerOperation(timer1)
+	time.Sleep(3 * time.Second)
+}
+
+func intervalOperation(t *time.Ticker, ch chan bool) {
+	for {
+		select {
+		case <-ch: // wait for done signal from tickers()
+			return
+		case t := <-t.C:
+			fmt.Println("Tick at", t)
+		}
+	}
+}
+
+func tickers() {
+	// We use tickers to execute code repeatedly at regular intervals
+	ticker := time.NewTicker(500 * time.Millisecond) // every 500 ms, the tick event hits
+	done := make(chan bool)
+	go intervalOperation(ticker, done)
+
+	time.Sleep(1600 * time.Millisecond)
+	ticker.Stop()
+	done <- true
+	fmt.Println("Ticker stopped")
+}
+
+func sorting() {
+	// It's pretty easy to sort
+	strs := []string{"c", "a", "b"}
+	sort.Strings(strs)
+	fmt.Println("Strings:", strs)
+
+	ints := []int{5, 2, 1}
+	sort.Ints(ints)
+	fmt.Println("Ints:", ints)
+
+	// We can check if soemthing is sorted
+	sort.StringsAreSorted(strs)
+
+	// How to reverse sort
+	sort.Sort(sort.Reverse(sort.StringSlice(strs)))
+	fmt.Println("Reversed Strings:", strs)
+}
+
+func regex() {
+	// It's fairly easy - just create the regexp, compile, and see if it matches
+	ipAddress := "192.168.1.1"
+	r, _ := regexp.Compile(`(\d{1,3}[.]\d{1,3}[.]\d{1,3}[.]\d{1,3})`)
+	fmt.Println(r.MatchString(ipAddress))
+
+	// Similarly, this finds all the occurences of ip addresses
+	wildIpAddress := "billbo192.168.1.1lollygagging10.0.0.1"
+	fmt.Println(r.FindAllString(wildIpAddress, -1))
+}
+
+func jsonHandling() {
+	// JSON can be handled with both maps and structs
+	// Let's generate some JSON using a map
+	data := map[string]interface{}{
+		"amount":   1234,
+		"isCool":   true,
+		"messasge": "hello!",
+		"properties": map[string]interface{}{
+			"idsAvailable": []int{1, 2, 3, 4},
+		},
+	}
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		fmt.Printf("could not marshal json: %s\n", err)
+		return
+	}
+
+	fmt.Printf("json data: %s\n", jsonData)
+
+	// Let's generate some using a struct
+	type properties struct {
+		idsAvailable []int
+	}
+
+	type myJson struct { // we can use `json:"columnName"` annotation to specify what the correct column name is
+		Amount          int        `json:"amount"`
+		IsCool          bool       `json:"isCool"`
+		Message         string     `json:"message"`
+		DateCreated     time.Time  `json:"dateCreated"`
+		prop            properties // properties will not be exported because the name isn't capitalized
+		NullStringValue *string    `json:"nullStringValue"`
+	}
+
+	newData := myJson{
+		Amount:      1234,
+		IsCool:      true,
+		Message:     "hello!",
+		DateCreated: time.Date(2022, 3, 2, 9, 10, 0, 0, time.UTC),
+		prop: properties{
+			idsAvailable: []int{1, 2, 3, 4},
+		},
+		NullStringValue: nil,
+	}
+	jsonData2, err2 := json.Marshal(newData)
+	if err2 != nil {
+		fmt.Printf("could not marshal json: %s\n", err2)
+		return
+	}
+	fmt.Printf("json data: %s\n", jsonData2)
+
+	// Loading a JSON file using structs
+	// Part 1 - Load File
+	jsonFile, err3 := os.Open("filehandling/test.json")
+	if err3 != nil {
+		fmt.Println(err3)
+	}
+	fmt.Println("Successfully opened test.json")
+	defer jsonFile.Close()
+
+	// Part 2 - Create structs
+	type Column struct {
+		Name      string  `json:"name"`
+		AvgPounds float64 `json:"avgPounds"`
+		Quantity  int     `json:"quantity"`
+		Critical  bool    `json:"critical"`
+	}
+
+	type Overall struct {
+		SourceName string   `json:"sourceName"`
+		Columns    []Column `json:"columns"`
+	}
+
+	// Part 3 - Unmarshall
+	byteVal, _ := io.ReadAll(jsonFile)
+	var data3 Overall
+	json.Unmarshal(byteVal, &data3)
+	fmt.Println(data3) // Notice how quantity is optional, and so for the second entry came back as the 0 value
+
+	// Unstructured data
+	var result map[string]interface{} // makes it a general mapping from String to Any
+	json.Unmarshal([]byte(byteVal), &result)
+	fmt.Println(result)
+
+	// It is preferred, if the structure of the JSON is known, to use structs to marshal and unmarshall JSON
+
+}
+
+func datesAndTimes() {
+	// Get datetime now
+	t := time.Now()
+	fmt.Println(t.Format(time.RFC3339))
+
+	// Get datetime now in UTC
+	utcTime := time.Now().UTC()
+	fmt.Println(utcTime.Format(time.RFC3339))
+
+	// Parsing string representation of date
+	strDate := "2022-01-03TTT11:05:32"
+	customLayout := "2006-01-02TTT15:04:05" // you  can specify a custom layout, but it must use Mon Jan 2 15:04:05 -0700 MST 2006 as a reference date???
+	t2, _ := time.Parse(customLayout, strDate)
+	fmt.Println(t2.Format(time.RFC3339))
+
+	// Conver date to time
+	p1 := t.Format(time.RFC3339)
+	fmt.Println(p1)
+}
+
+func envVariables() {
+	// Loop through all env variables
+	for _, e := range os.Environ() {
+		pair := strings.SplitN(e, "=", 2)
+		fmt.Println(pair[0])
+	}
+
+	// Set env variable
+	os.Setenv("Foo", "bar")
+
+	// Read env variable
+	fmt.Println("Foo:", os.Getenv("Foo"))
+}
+
+func loggingWork() {
+	log.Println("standard logger") // this uses the standard logger
+
+	// You can create custom loggers that can be configured and moved around
+	mylog := log.New(os.Stdout, "my:", log.LstdFlags)
+	mylog.Println("from mylog")
+
+	// // There is also slog, which provides structured json output - my version of Go does not have this yet
+	// jsonHandler := slog.NewJSONHandler(os.Stderr, nil)
+	// myslog := slog.New(jsonHandler)
+	// myslog.Info("hi there")
+}
+
+func httpWork() {
+	// This function prints the first 5 lines of the http response
+	resp, err := http.Get("https://gobyexample.com")
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
+
+	fmt.Println("Response status:", resp.Status)
+
+	scanner := bufio.NewScanner(resp.Body)
+	for i := 0; scanner.Scan() && i < 5; i++ {
+		fmt.Println(scanner.Text())
+	}
+
+	if err := scanner.Err(); err != nil {
+		panic(err)
+	}
+
+	// // Customize request
+	// requestURL := "http://api.openweathermap.org/data/2.5/weather?lat=40.5&lon=45.5&units=imperial&APPID=22283656720a28868b561ca0753a437f"
+	// bodyReader := bytes.NewReader([]byte(`{"client_message": "hello, server!"}`))
+	// req, err := http.NewRequest(http.MethodGet, requestURL, bodyReader)
+	// req.Header.Set("Content-Type", "application/json")
+
+	// client := http.Client{
+	// 	Timeout: 30 * time.Second,
+	// }
+
+	// res1, err1 := client.Do(req)
+	fmt.Println(res1.Body.Read([]byte{}))
 }
 
 func main() { // the main function should always reside in the main package
@@ -1633,7 +2156,7 @@ func main() { // the main function should always reside in the main package
 	// slices()
 	// _ = variadicNumFunction(10, 1, 2, 3, 5, 7, 9, 10, 11, 13)
 	// maps()
-	// strings()
+	// stringsWork()
 	// pointers()
 	// structs()
 	// methods()
@@ -1651,8 +2174,20 @@ func main() { // the main function should always reside in the main package
 	// errorHandling()
 	// customErrors()
 	// panics()
-	firstClassFunctions()
+	// firstClassFunctions()
+	// reflection()
+	// readingFiles()
+	// writingFiles()
+	// generics()
+	// timeouts()
+	// timers()
+	// tickers()
+	// sorting()
+	// regex()
+	// jsonHandling()
+	// datesAndTimes()
+	// os.Exit(code int) - this is how you exit and avoid even defer - use this sparingly
+	// envVariables()
+	// loggingWork()
+	httpWork()
 }
-
-// Revisit: Strings, Packages
-// Create cheat sheet
