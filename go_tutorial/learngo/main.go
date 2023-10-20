@@ -2124,7 +2124,11 @@ func httpWork() {
 	// }
 
 	// res1, err1 := client.Do(req)
-	fmt.Println(res1.Body.Read([]byte{}))
+	// fmt.Println(res1.Body.Read([]byte{}))
+}
+
+type TestStruct struct {
+	processDate *time.Time
 }
 
 func main() { // the main function should always reside in the main package
@@ -2189,5 +2193,13 @@ func main() { // the main function should always reside in the main package
 	// os.Exit(code int) - this is how you exit and avoid even defer - use this sparingly
 	// envVariables()
 	// loggingWork()
-	httpWork()
+	// httpWork()
+
+	t1 := TestStruct{
+		nil,
+	}
+	if t1.processDate == nil {
+		fmt.Println(t1.processDate.Format("2006-01-02"))
+	}
+
 }
